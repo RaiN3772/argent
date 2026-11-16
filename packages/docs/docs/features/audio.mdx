@@ -33,6 +33,8 @@ Argent needs a small hook in the app process. Argent loads the hook into every a
 
 An app that started before Argent connected to the simulator does not have the hook. The agent restarts that app once.
 
+An app that loaded an older hook without the recording part cannot record. The agent restarts that app once, so that it loads the installed hook.
+
 To load the hook only into simulators where the agent used an audio tool, run `argent disable ios-audio-always-inserted`. Then the first audio request loads the hook, and only apps that start after that request have it. See [feature flags](/docs/reference/configuration).
 
 ## Where the audio lands

@@ -108,6 +108,7 @@ let session: AudioSession;
 function statusText(fields: Record<string, string | number>): string {
   const all = {
     proto: 1,
+    features: "rec",
     pid: process.pid,
     rate: 48000,
     streams: 1,
@@ -195,7 +196,13 @@ describe("parseAppStatus", () => {
       recordingId: "ab12",
       recordedFrames: 480,
       recordingDone: false,
+      features: ["rec"],
     });
+  });
+
+  it("splits features on commas, none when the line is missing", () => {
+    expect(parseAppStatus("features=a,rec\n").features).toEqual(["a", "rec"]);
+    expect(parseAppStatus("pid=1\n").features).toEqual([]);
   });
 
   it("reads an unknown or missing input as the microphone", () => {
@@ -605,6 +612,28 @@ describe("recording", () => {
       expect(samples.readInt16LE(44)).toBe(16384); // 0.5
     } finally {
       stopGuest();
+    }
+  });
+
+  it("refuses at once, without writing a request, a hook without recording (dormant or active)", async () => {
+    for (const fields of [
+      { state: "dormant", features: "" },
+      { state: "active", features: "" },
+      { state: "active", features: "other" },
+    ]) {
+      // An input-only hook writes no features line at all.
+      fs.writeFileSync(
+        path.join(dir, `st.${BUNDLE}`),
+        statusText(fields).replace(/^features=\n/m, "")
+      );
+      const t0 = Date.now();
+      const err = await startRecording(session, BUNDLE, wav(), true).catch((e: unknown) => e);
+      expect(Date.now() - t0).toBeLessThan(500);
+      expect(getFailureSignal(err)?.error_code).toBe(FAILURE_CODES.AUDIO_HOOK_NOT_ACTIVE);
+      expect((err as Error).message).toContain("microphone input only");
+      expect((err as Error).message).toContain("restart-app");
+      expect(fs.existsSync(path.join(dir, `rec.${BUNDLE}`))).toBe(false);
+      expect(fs.readdirSync(dir).filter((n) => n.endsWith(".ring"))).toEqual([]);
     }
   });
 

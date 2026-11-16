@@ -210,6 +210,8 @@ export async function armAudio(
 interface AppAudioStatus {
   /** Contract version of the hook; 0 when the hook predates it. */
   proto: number;
+  /** Optional parts of the contract the hook has (`features=`, comma-separated): `rec` when it can record. */
+  features: string[];
   /** `dormant`: hook loaded, the app has not opened audio yet (no helper, no acknowledgements). */
   state: "dormant" | "active";
   pid: number;
@@ -240,6 +242,7 @@ export function parseAppStatus(text: string): AppAudioStatus {
   const input = kv.get("input");
   return {
     proto: num("proto"),
+    features: (kv.get("features") ?? "").split(",").filter(Boolean),
     state: kv.get("state") === "dormant" ? "dormant" : "active",
     pid: num("pid"),
     sampleRate: num("rate"),
@@ -473,6 +476,25 @@ function noHookError(bundleId: string): FailureError {
   );
 }
 
+/**
+ * Fails fast when the app's hook is a build without recording: it never reads a recording request, so writing one
+ * would only wait for an acknowledgement that does not come.
+ */
+function assertHookRecords(status: AppAudioStatus | null, bundleId: string): void {
+  if (!status || status.features.includes("rec")) return;
+  throw new FailureError(
+    `The audio hook in ${bundleId} cannot record the app's output: it is a build with microphone input only. ` +
+      `Call restart-app for ${bundleId} so it loads the installed hook, then retry. If it still cannot record, ` +
+      `this Argent install ships an audio hook without recording.`,
+    {
+      error_code: FAILURE_CODES.AUDIO_HOOK_NOT_ACTIVE,
+      failure_stage: "audio_hook_status",
+      failure_area: "tool_server",
+      error_kind: "unsupported",
+    }
+  );
+}
+
 /** Starts recording the app's speaker output into `outputPath`; resolves once the app confirms. */
 export async function startRecording(
   session: AudioSession,
@@ -485,6 +507,7 @@ export async function startRecording(
   if (hook.state === "old-proto") assertHookProto(hook.status, bundleId);
   if (hook.state === "none" || hook.state === "stale") throw noHookError(bundleId);
   const status = hook.status;
+  assertHookRecords(status, bundleId);
   // A dormant hook acknowledges nothing until the app opens audio; it reads the request when it does.
   const dormant = hook.state === "dormant";
   const { recorders, pendingIds } = session;

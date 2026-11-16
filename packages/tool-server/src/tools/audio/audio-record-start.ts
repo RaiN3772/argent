@@ -36,7 +36,7 @@ Use when checking what an app plays: a notification sound, text to speech, a cal
 The recording runs until \`audio-record-stop\`, which returns the file. Start it before the action that makes the app play. One recording per app at a time.
 Records the one app only, not the whole simulator and not web content. Needs the audio hook in the app: restart-app an app launched before Argent armed the simulator.
 Returns { status: "recording", bundleId, muteOutput } once the app confirms that it records.
-Fails if the audio hook is not live in the app, the app is already being recorded, or the target is not a local iOS Simulator.`,
+Fails if the audio hook is not live in the app or is a build without recording, the app is already being recorded, or the target is not a local iOS Simulator.`,
     zodSchema,
     searchHint: "audio record output speaker sound capture app playback wav start",
     interaction: {

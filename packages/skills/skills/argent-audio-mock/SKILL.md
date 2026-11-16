@@ -12,6 +12,7 @@ Apps launched after Argent armed the simulator carry the hook. Pass `bundleId` t
 - `appReady: false`, launched before arming: call `restart-app` once, then `audio-input` again with `bundleId`.
 - The message says the app has not reported its hook since it started: it was just relaunched. Retry once before restarting.
 - Still `false` after one restart: a tool that injects its own libraries started it (Xcode run, Detox, XCUITest). Start it with `launch-app` instead.
+- `audio-record-start` says the hook has microphone input only: call `restart-app` once so the app loads the installed hook.
 
 ## 2. Workflow: microphone input
 
