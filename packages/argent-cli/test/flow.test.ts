@@ -1501,6 +1501,95 @@ describe("argent e2e run", () => {
     );
   });
 
+  it("prints the list as JSON with --json, in the plain order and with no stderr notes", async () => {
+    const listRoot = path.join(tempRoot, "list-json-project");
+    const e2eDir = path.join(listRoot, ".argent", "e2e");
+    const legacyDir = path.join(listRoot, ".argent", "flows");
+    await fsp.mkdir(path.join(e2eDir, "suite"), { recursive: true });
+    await fsp.mkdir(legacyDir, { recursive: true });
+    await Promise.all([
+      fsp.writeFile(path.join(e2eDir, "login.yaml"), "steps: []\n"),
+      fsp.writeFile(path.join(e2eDir, "suite", "pay.yaml"), "steps: []\n"),
+      fsp.writeFile(path.join(legacyDir, "login.yaml"), "steps: []\n"),
+      fsp.writeFile(path.join(legacyDir, "signup.yaml"), "steps: []\n"),
+    ]);
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(listRoot);
+      await flow(["list"], opts);
+      const plainPaths = [...logs];
+      logs.length = 0;
+      errs.length = 0;
+      await flow(["list", "--json"], opts);
+
+      expect(errs).toEqual([]);
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toBe(JSON.stringify(JSON.parse(logs[0]!), null, 2));
+      const { e2eTests } = JSON.parse(logs[0]!);
+      expect(e2eTests).toEqual([
+        { path: ".argent/e2e/login.yaml", name: "login", legacy: false },
+        { path: ".argent/e2e/suite/pay.yaml", legacy: false },
+        {
+          path: ".argent/flows/login.yaml",
+          name: "login",
+          legacy: true,
+          shadowedBy: ".argent/e2e/login.yaml",
+        },
+        { path: ".argent/flows/signup.yaml", name: "signup", legacy: true },
+      ]);
+      expect(e2eTests.map((t: { path: string }) => t.path).join("\n")).toBe(plainPaths.join("\n"));
+    } finally {
+      process.chdir(previousCwd);
+    }
+  });
+
+  it.each([
+    ["no e2e test directory", "list-json-no-dirs-project", false],
+    ["no runnable e2e test", "list-json-empty-project", true],
+  ])("prints an empty JSON list with --json when there is %s", async (_label, dir, withDir) => {
+    const listRoot = path.join(tempRoot, dir);
+    await fsp.mkdir(withDir ? path.join(listRoot, ".argent", "e2e") : listRoot, {
+      recursive: true,
+    });
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(listRoot);
+      await flow(["list", "--json"], opts);
+    } finally {
+      process.chdir(previousCwd);
+    }
+
+    expect(JSON.parse(logs.join("\n"))).toEqual({ e2eTests: [] });
+    expect(errs).toEqual([]);
+  });
+
+  it.each([
+    [["--frobnicate"], "Unknown flag: --frobnicate"],
+    [["extra"], 'unexpected argument "extra"; e2e list takes no arguments'],
+  ])("rejects `list %s` as a usage error with exit 2", async (args, message) => {
+    await expect(flow(["list", ...args], opts)).rejects.toThrow("process.exit:2");
+    expect(logs).toEqual([]);
+    expect(errs.join("\n")).toBe(`Error: ${message}\nRun \`argent e2e --help\`.`);
+
+    for (const jsonArgs of [
+      ["--json", ...args],
+      [...args, "--json"],
+    ]) {
+      errs.length = 0;
+      await expect(flow(["list", ...jsonArgs], opts)).rejects.toThrow("process.exit:2");
+      expect(logs).toEqual([]);
+      expect(errs).toHaveLength(1);
+      expect(JSON.parse(errs[0]!)).toEqual({ event: "error", error: message });
+    }
+  });
+
+  it.each([[["--json", "--help"]], [["-h"]]])("prints the help for `list %s`", async (args) => {
+    await flow(["list", ...args], opts);
+
+    expect(logs.join("\n")).toContain("Usage: argent e2e");
+    expect(logs.join("\n")).toContain("list [--json]");
+  });
+
   it("renders the report — echo lines unnumbered, real steps numbered, reasons and fragment tags shown — and exits 1 on failure", async () => {
     toolsClientMock.callTool.mockResolvedValue({
       data: report({
