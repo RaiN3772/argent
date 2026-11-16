@@ -472,7 +472,20 @@ On Chromium, Argent boots the app before step 1 only when the run has no `device
 | `argent e2e run <path>.yaml` | Run any e2e test file. The path must not contain `..`                                                                 |
 | `argent e2e run <dir>`       | Run every e2e test in the directory, one after the other                                                              |
 | `argent e2e list`            | List the e2e test files in `.argent/e2e` and `.argent/flows`                                                          |
+| `argent e2e list <dir>`      | List the e2e test files in the directory and its subdirectories. The path must not contain `..`                       |
 | `argent e2e list --json`     | Print the same list as a JSON document. See [The `argent e2e list` JSON document](#the-argent-e2e-list-json-document) |
+
+`argent e2e list <dir>` prints paths relative to the current directory for a relative `<dir>`, and absolute paths for an absolute `<dir>`. `argent e2e run` accepts each printed path. Argent puts `./` in front of a printed path that starts with `-`, so that `argent e2e run` does not read the path as an option.
+
+Argent writes an error on stderr and gives exit code 2 when `<dir>`:
+
+- does not exist
+- is not a directory
+- cannot be read
+- is empty text
+- has a `..` segment
+
+When `<dir>` holds no e2e test, Argent writes `No e2e tests found in <dir>` on stderr, prints nothing on stdout and gives exit code 0. With `--json`, Argent prints the empty array.
 
 | Option               | Description                                                                                                                                                                   |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -568,7 +581,7 @@ Pin `--platform` and `--device` on iOS, Android and Vega. On Chromium, pass `--p
 
 | Field        | Description                                                                                                                      |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `path`       | The path that the plain output prints, relative to the current directory                                                         |
+| `path`       | The path that the plain output prints                                                                                            |
 | `name`       | The name that `argent e2e run <name>` accepts. Only for a file directly in `.argent/e2e` or `.argent/flows`                      |
 | `legacy`     | `true` for an e2e test in `.argent/flows`                                                                                        |
 | `shadowedBy` | The path of an earlier entry with the same name. `argent e2e run <name>` runs that entry instead. Only when such an entry exists |
@@ -589,6 +602,8 @@ Pin `--platform` and `--device` on iOS, Android and Vega. On Chromium, pass `--p
 ```
 
 When Argent finds no e2e test, the array is empty and the exit code is 0. With `--json`, Argent writes no notes on stderr. With `--json`, a usage error writes one JSON object with `event` and `error` on stderr and gives exit code 2.
+
+`argent e2e list <dir> --json` gives each entry only the `path` field. With `--json`, Argent writes each `<dir>` error as the JSON error object on stderr.
 
 <a id="flows-over-a-link" />
 
